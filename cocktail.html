@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>The Cocktail DB</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background-color: #f4f4f4;
+      margin: 0;
+      padding: 20px;
+    }
+    
+    h1 {
+      text-align: center;
+    }
+
+    form {
+      margin-bottom: 20px;
+      text-align: center;
+    }
+    
+    input[type="text"],
+    textarea {
+      padding: 10px;
+      font-size: 16px;
+      width: 300px;
+    }
+    
+    button[type="submit"] {
+      padding: 10px 20px;
+      font-size: 16px;
+    }
+
+    #cocktailList {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+    }
+    
+    .cocktail {
+      width: 300px;
+      background-color: #fff;
+      border-radius: 5px;
+      padding: 20px;
+      margin: 10px;
+      box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+    }
+    
+    .cocktail h2 {
+      margin: 0;
+      font-size: 24px;
+      color: #333;
+    }
+    
+    .cocktail p {
+      margin: 10px 0;
+      font-size: 14px;
+      color: #666;
+    }
+    
+    .cocktail img {
+      max-width: 100%;
+      height: auto;
+      margin-bottom: 10px;
+      border-radius: 3px;
+    }
+  </style>
+</head>
+<body>
+  <h1>Lista dei Cocktail</h1>
+
+  <div>
+    <form id="searchForm">
+      <label for="searchInput">Cerca cocktail per nome:</label><br>
+      <input type="text" id="searchInput" name="searchInput" placeholder="Inserisci il nome del cocktail">
+      <button type="submit">Cerca</button>
+    </form>
+
+    <form id="searchIngredientsForm">
+      <label for="searchIngredientsInput">Cerca cocktail per ingredienti:</label><br>
+      <textarea id="searchIngredientsInput" name="searchIngredientsInput" rows="3" placeholder="Inserisci gli ingredienti separati da virgole"></textarea>
+      <button type="submit">Cerca</button>
+    </form>
+  </div>
+
+  <div id="cocktailList"></div>
+
+  <script>
+    document.addEventListener("DOMContentLoaded", function() {
+      var searchForm = document.getElementById("searchForm");
+      var searchInput = document.getElementById("searchInput");
+      var searchIngredientsForm = document.getElementById("searchIngredientsForm");
+      var searchIngredientsInput = document.getElementById("searchIngredientsInput");
+      var cocktailList = document.getElementById("cocktailList");
+      
+      searchForm.addEventListener("submit", function(event) {
+        event.preventDefault();
+
+        var searchTerm = searchInput.value.trim();
+
+        if (searchTerm === "") {
+          alert("Inserisci il nome del cocktail da cercare.");
+          return;
+        }
+
+        searchCocktails(searchTerm);
+        searchInput.value = "";
+      });
+
+      searchIngredientsForm.addEventListener("submit", function(event) {
+        event.preventDefault();
+
+        var ingredients = searchIngredientsInput.value
+          .split(",")
+          .map(function(ingredient) {
+            return ingredient.trim();
+          })
+          .filter(function(ingredient) {
+            return ingredient !== "";
+          });
+
+        if (ingredients.length === 0) {
+          alert("Inserisci almeno un ingrediente per cercare i cocktail.");
+          return;
+        }
+
+        var searchTerm = ingredients.join(",");
+
+        searchCocktailsByIngredients(searchTerm);
+        searchIngredientsInput.value = "";
+      });
+
+      function searchCocktails(searchTerm) {
+        fetch("https://www.thecocktaildb.com/api/json/v1/1/search.php?s=" + searchTerm)
+          .then(response => response.json())
+          .then(data => {
+            renderCocktails(data.drinks);
+          })
+          .catch(error => console.log(error));
+      }
+
+      function searchCocktailsByIngredients(searchTerm) {
+        fetch("https://www.thecocktaildb.com/api/json/v1/1/filter.php?i=" + searchTerm)
+          .then(response => response.json())
+          .then(data => {
+            var cocktailIds = data.drinks.map(cocktail => cocktail.idDrink);
+            fetchCocktailsByIds(cocktailIds);
+          })
+          .catch(error => console.log(error));
+      }
+
+      function fetchCocktailsByIds(cocktailIds) {
+        Promise.all(
+          cocktailIds.map(cocktailId =>
+            fetch("https://www.thecocktaildb.com/api/json/v1/1/lookup.php?i=" + cocktailId)
+              .then(response => response.json())
+              .then(data => data.drinks[0])
+          )
+        )
+          .then(cocktails => {
+            renderCocktails(cocktails);
+          })
+          .catch(error => console.log(error));
+      }
+
+      function renderCocktails(cocktails) {
+        cocktailList.innerHTML = "";
+
+        if (!cocktails || cocktails.length === 0) {
+          alert("Nessun cocktail trovato con i criteri di ricerca specificati.");
+          return;
+        }
+
+        cocktails.forEach(cocktail => {
+          var cocktailContainer = document.createElement("div");
+          cocktailContainer.className = "cocktail";
+
+          var cocktailName = document.createElement("h2");
+          cocktailName.textContent = cocktail.strDrink;
+
+          var cocktailCategory = document.createElement("p");
+          cocktailCategory.textContent = "Category: " + (cocktail.strCategory || "N/A");
+
+          var cocktailGlass = document.createElement("p");
+          cocktailGlass.textContent = "Glass: " + (cocktail.strGlass || "N/A");
+
+          var cocktailInstructions = document.createElement("p");
+          cocktailInstructions.textContent = "Instructions: " + (cocktail.strInstructions || "N/A");
+
+          var cocktailIngredients = document.createElement("p");
+          var ingredientsText = "Ingredients: ";
+          for (var i = 1; i <= 15; i++) {
+            var ingredient = cocktail["strIngredient" + i];
+            var measure = cocktail["strMeasure" + i];
+            if (ingredient && ingredient.trim() !== "") {
+              ingredientsText += ingredient;
+              if (measure && measure.trim() !== "") {
+                ingredientsText += " (" + measure + ")";
+              }
+              ingredientsText += ", ";
+            }
+          }
+          cocktailIngredients.textContent = ingredientsText.slice(0, -2) || "N/A";
+
+          var cocktailImage = document.createElement("img");
+          cocktailImage.src = cocktail.strDrinkThumb;
+          cocktailImage.alt = cocktail.strDrink;
+
+          cocktailContainer.appendChild(cocktailName);
+          cocktailContainer.appendChild(cocktailCategory);
+          cocktailContainer.appendChild(cocktailGlass);
+          cocktailContainer.appendChild(cocktailInstructions);
+          cocktailContainer.appendChild(cocktailIngredients);
+          cocktailContainer.appendChild(cocktailImage);
+
+          cocktailList.appendChild(cocktailContainer);
+        });
+      }
+    });
+  </script>
+</body>
+</html>
